@@ -111,7 +111,7 @@ void startWifiManager( bool autoConnect = true ){
 	if( autoConnect )
 		wifiManager.autoConnect(AP_NAME);
 	else
-		wifiManager.startConfigPortal(Jasdoge WakeupSys);
+		wifiManager.startConfigPortal(AP_NAME);
     //Serial.printf("Wifi manager stopped\n");
     wifi_man_running = false;
 
