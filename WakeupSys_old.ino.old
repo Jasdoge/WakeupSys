@@ -1,0 +1,106 @@
+#include <Arduino.h>
+/*
+#include <WiFi.h>
+*/
+#include "SPIFFS.h"
+
+#include "AudioFileSourceSPIFFS.h"
+#include "AudioFileSourceID3.h"
+#include "AudioGeneratorMP3.h"
+#include "AudioOutputI2S.h"
+
+/*
+    Sound files are in /data
+*/
+
+// To run, set your ESP8266 build to 160MHz, and include a SPIFFS of 512KB or greater.
+// Use the "Tools->ESP8266/ESP32 Sketch Data Upload" menu to write the MP3 to SPIFFS
+// Then upload the sketch normally.  
+AudioOutputI2S *out;
+AudioGeneratorMP3* sound_mp3;
+AudioFileSourceSPIFFS* sound_file;
+
+// Called when a metadata event occurs (i.e. an ID3 tag, an ICY block, etc.
+void MDCallback(void *cbData, const char *type, bool isUnicode, const char *string){
+    (void)cbData;
+    /*
+    Serial.printf("ID3 callback for: %s = '", type);
+
+    if( isUnicode )
+        string += 2;
+
+    while( *string ){
+
+        char a = *(string++);
+        if( isUnicode )
+            string++;
+        
+        Serial.printf("%c", a);
+
+    }
+    Serial.printf("'\n");
+    Serial.flush();
+    */
+}
+
+void playSound( String url ){
+
+    stopSound();
+
+    //AudioFileSourceSPIFFS *file = 
+    sound_file = new AudioFileSourceSPIFFS(url.c_str());
+    //id3s[x.first] = new AudioFileSourceID3(file);
+    //id3s[x.first]->RegisterMetadataCB(MDCallback, (void*)"ID3TAG");
+    sound_mp3 = new AudioGeneratorMP3();
+    sound_mp3->begin(sound_file, out);
+
+}
+
+void stopSound(){
+
+    if( sound_mp3 == NULL )
+        return;
+    
+    sound_mp3->stop();
+    delete sound_mp3;
+    delete sound_file;
+    sound_mp3 = NULL;
+    sound_file = NULL;
+
+}
+
+
+void setup(){
+    
+	Serial.begin(115200);
+	delay(1000);
+	
+	if(!SPIFFS.begin(true)){
+		Serial.println("SPIFFS failed to open");
+		return;
+	}
+
+	Serial.printf("Sample MP3 playback begins...\n");
+
+    out = new AudioOutputI2S();
+    pinMode(34, INPUT);
+    playSound("/8_on.mp3");
+
+
+}
+
+void loop(){
+
+    bool found = false;
+    
+    if( sound_mp3 != NULL && sound_mp3->isRunning() ){
+
+        found = true;
+        if( !sound_mp3->loop() )
+            stopSound();
+        
+    }
+    if( !found )
+        delay(100);
+
+}
