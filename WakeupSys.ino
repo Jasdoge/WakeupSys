@@ -16,15 +16,19 @@
 #define CONF_TIMEZONE "Europe/Stockholm"
 const char* AP_NAME = "Jasdoge WakeupSys";
 
-// Include the required libraries. You should be able to get these from the arduino IDE
+// Include the required libraries. 
 #include "esp_task.h"
 #include "SPIFFS.h"
-#include "ESP32_MAS.h"
-#include <TM1637Display.h>
+#include "soc/timer_group_struct.h"
+#include "soc/timer_group_reg.h"
 #include <WiFi.h>
-#include <ezTime.h>
 #include <ESP32Ticker.h>
+
+// You should be able to get these from the arduino IDE
+#include <TM1637Display.h>
+#include <ezTime.h>
 #include <WiFiManager.h>
+
 
 // Config
 const uint8_t lamps_pin = 21;               // GPIO going to the gate of the MOSFET
@@ -35,8 +39,8 @@ const uint8_t button_r_pin = 12;            // Right button GPIO
 
 const uint8_t clock_brightness = 0xA;       // Brightness of the clock, I think 0xF is max
 
-// Audio globals
-ESP32_MAS Audio;                            // Audio object
+const int speakerPin = 5;
+const int freq = 75;    // microseconds
 
 // Display
 const uint8_t disp_clk_pin = 23;                        // GPIO for the clock clock pin
@@ -364,6 +368,43 @@ void updateButtons( bool l, bool r ){
 
 
 
+/* initialize with any 32 bit non-zero  unsigned long value. */
+#define LFSR_INIT  0xfeedfaceUL
+/* Choose bits 32, 30, 26, 24 from  http://arduino.stackexchange.com/a/6725/6628
+ *  or 32, 22, 2, 1 from 
+ *  http://www.xilinx.com/support/documentation/application_notes/xapp052.pdf
+ *  or bits 32, 16, 3,2  or 0x80010006UL per http://users.ece.cmu.edu/~koopman/lfsr/index.html 
+ *  and http://users.ece.cmu.edu/~koopman/lfsr/32.dat.gz
+ */  
+#define LFSR_MASK  ((unsigned long)( 1UL<<31 | 1UL <<15 | 1UL <<2 | 1UL <<1  ))
+
+unsigned int generateNoise(){ 
+  // See https://en.wikipedia.org/wiki/Linear_feedback_shift_register#Galois_LFSRs
+   static unsigned long int lfsr = LFSR_INIT;  /* 32 bit init, nonzero */
+   /* If the output bit is 1, apply toggle mask.
+                                    * The value has 1 at bits corresponding
+                                    * to taps, 0 elsewhere. */
+
+   if(lfsr & 1) { lfsr =  (lfsr >>1) ^ LFSR_MASK ; return(1);}
+   else         { lfsr >>= 1;                      return(0);}
+}
+
+void audioTask( void * pvParameters ){
+
+    pinMode(speakerPin,OUTPUT);
+    Serial.printf("Audio task now running on core %i\n", xPortGetCoreID());
+    while( true ){
+        TIMERG0.wdt_wprotect=TIMG_WDT_WKEY_VALUE;
+        TIMERG0.wdt_feed=1;
+        TIMERG0.wdt_wprotect=0;
+        digitalWrite(speakerPin, generateNoise());
+        delayMicroseconds(freq);
+    }
+
+}
+
+
+
 void setup() {
 
     Serial.begin(115200);
@@ -438,10 +479,15 @@ void setup() {
     display.setSegments(data);
 
     // Start up the audio loop
-    Audio.startDAC();
-    Audio.setGain(1, 150);
-    Audio.loopFile(1, "/noise2.aiff");
-    Serial.println("Noise loop enabled");
+    xTaskCreatePinnedToCore(
+        audioTask,   // Function to implement the task 
+        "audioTask", // Name of the task 
+        1024,      // Stack size in words 
+        NULL,       // Task input parameter 
+        1,          // Priority of the task 
+        NULL,       // Task handle. 
+        0           // Core where the task should run 
+    );  
 
     // Sync the clock
     //Serial.print("setup() running on core ");
