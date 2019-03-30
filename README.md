@@ -1,4 +1,6 @@
 # WakeupSys
 Repository for a DIY wake up light with white noise generation.
 
-Youtube vid coming soon (gonna be a few days sicne it's a looot of data
+View the making of video on youtube:
+
+[![View the making of here](https://img.youtube.com/vi/boEhv6Mx6f8/0.jpg)](https://www.youtube.com/watch?v=boEhv6Mx6f8)
